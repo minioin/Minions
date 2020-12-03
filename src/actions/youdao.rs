@@ -1,24 +1,22 @@
-/*
-* @Author: BlahGeek
-* @Date:   2017-06-24
-* @Last Modified by:   BlahGeek
-* @Last Modified time: 2018-04-10
-*/
+// @Author: BlahGeek
+// @Date:   2017-06-24
+// @Last Modified by:   BlahGeek
+// @Last Modified time: 2018-04-10
 
-extern crate url;
-extern crate reqwest;
 extern crate crypto;
+extern crate reqwest;
 extern crate serde_json;
+extern crate url;
 
-use self::crypto::digest::Digest;
-use self::url::form_urlencoded;
+use self::{crypto::digest::Digest, url::form_urlencoded};
 
-use std::io::Read;
-use std::sync::Arc;
-use crate::mcore::action::{Action, ActionResult};
-use crate::mcore::item::{Item, Icon};
-use crate::mcore::config::Config;
-use crate::mcore::errors::*;
+use crate::mcore::{
+    action::{Action, ActionResult},
+    config::Config,
+    errors::*,
+    item::{Icon, Item},
+};
+use std::{io::Read, sync::Arc};
 
 struct Youdao {}
 
@@ -43,10 +41,11 @@ struct YoudaoResult {
 }
 
 impl Action for Youdao {
+    fn runnable_arg(&self) -> bool {
+        true
+    }
 
-    fn runnable_arg (&self) -> bool { true }
-
-    fn run_arg (&self, text: &str) -> ActionResult {
+    fn run_arg(&self, text: &str) -> ActionResult {
         let salt = "WTF";
         let mut hash = crypto::md5::Md5::new();
         hash.input(APP_KEY.as_bytes());
@@ -66,10 +65,12 @@ impl Action for Youdao {
         trace!("Youdao request url: {}", url);
 
         let mut result = String::new();
-        reqwest::get(&url).map_err(|e| Error::with_chain(e, "Failed to perform HTTP request"))?
-            .read_to_string(&mut result).map_err(|e| Error::with_chain(e, "Failed to read request reply"))?;
+        reqwest::get(&url)
+            .map_err(|e| Error::with_chain(e, "Failed to perform HTTP request"))?
+            .read_to_string(&mut result)
+            .map_err(|e| Error::with_chain(e, "Failed to read request reply"))?;
 
-        let result : YoudaoResult = serde_json::from_str(&result)
+        let result: YoudaoResult = serde_json::from_str(&result)
             .map_err(|e| Error::with_chain(e, "Failed parsing JSON"))?;
         if result.errorCode != "0" || result.translation.len() == 0 {
             bail!("Invalid youdao API return code {}", result.errorCode);
@@ -83,18 +84,18 @@ impl Action for Youdao {
         }
         main_text += &result.translation[0];
 
-        let mut ret = vec![ Item {
+        let mut ret = vec![Item {
             title: main_text,
             subtitle: Some(result.query),
-            .. Item::default()
-        } ];
+            ..Item::default()
+        }];
 
         if let Some(basic) = result.basic {
             for explain in basic.explains {
-                ret.push( Item {
+                ret.push(Item {
                     title: explain,
-                    .. Item::default()
-                } )
+                    ..Item::default()
+                })
             }
         }
 
@@ -108,8 +109,8 @@ pub fn get(_: &Config) -> Item {
         badge: Some("Translate".into()),
         priority: -5,
         icon: Some(Icon::FontAwesome("globe".into())),
-        action: Some(Arc::new(Youdao{})),
-        .. Item::default()
+        action: Some(Arc::new(Youdao {})),
+        ..Item::default()
     }
 }
 

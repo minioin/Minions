@@ -1,10 +1,8 @@
-use std::path::Path;
-use std::sync::Arc;
+use std::{path::Path, sync::Arc};
 
 use crate::mcore::item::Item;
 
-use super::action::ScriptAction;
-use super::parser::parse_icon;
+use super::{action::ScriptAction, parser::parse_icon};
 
 #[derive(Deserialize, Debug, Clone, PartialEq)]
 #[serde(rename_all = "snake_case")]
@@ -56,32 +54,28 @@ impl ScriptItem {
     }
 
     pub fn into_item(self, script_dir: &Path) -> Item {
+        let action: Option<ScriptAction> = match self.action {
+            None => None,
+            Some(action) => Some(ScriptAction {
+                script_dir: script_dir.to_path_buf(),
+                action,
+                action_output_format: self.action_output_format,
+                action_run_bare: self.action_run_bare,
+                action_run_arg: self.action_run_arg,
+                action_run_realtime: self.action_run_realtime,
+                action_suggest_arg_scope: self.action_suggest_arg_scope,
+            }),
+        };
 
-        let action : Option<ScriptAction> =
-            match self.action {
-                None => None,
-                Some(action) =>
-                    Some( ScriptAction {
-                        script_dir: script_dir.to_path_buf(),
-                        action: action,
-                        action_output_format: self.action_output_format,
-                        action_run_bare: self.action_run_bare,
-                        action_run_arg: self.action_run_arg,
-                        action_run_realtime: self.action_run_realtime,
-                        action_suggest_arg_scope: self.action_suggest_arg_scope,
-                    } ),
-            };
-
-        let icon =
-            match self.icon {
-                Some(ref s) => parse_icon(&s, script_dir),
-                None => None,
-            };
+        let icon = match self.icon {
+            Some(ref s) => parse_icon(&s, script_dir),
+            None => None,
+        };
 
         Item {
             title: self.title,
             subtitle: self.subtitle,
-            icon: icon,
+            icon,
             badge: self.badge,
             priority: self.priority,
             data: self.data,
@@ -91,6 +85,5 @@ impl ScriptItem {
                 None => None,
             },
         }
-
     }
 }

@@ -1,14 +1,11 @@
 // use std::slice::SliceConcatExt;
 extern crate serde;
 
-use toml;
-use dirs;
 use self::serde::de::Deserialize;
+use dirs;
+use toml;
 
-use std;
-use std::fmt;
-use std::io::prelude::*;
-use std::error::Error;
+use std::{self, error::Error, fmt, io::prelude::*};
 
 #[derive(Debug)]
 pub struct ConfigGetError {
@@ -41,8 +38,10 @@ impl<'a> ConfigValue<'a> {
     }
 
     fn into_result<'de, T>(self) -> Result<T, ConfigGetError>
-            where T: Deserialize<'de> {
-        let err = ConfigGetError{path: self.path};
+    where
+        T: Deserialize<'de>,
+    {
+        let err = ConfigGetError { path: self.path };
         if let Some(v) = self.value {
             if let Ok(v) = v.clone().try_into::<T>() {
                 Ok(v)
@@ -79,9 +78,9 @@ impl Config {
             let _ = fin.read_to_string(&mut content);
         }
         let userconfig = content.parse::<toml::Value>().ok();
-        let defaultconfig = 
-            include_str!("../../config/default.toml")
-            .parse::<toml::Value>().unwrap();
+        let defaultconfig = include_str!("../../config/default.toml")
+            .parse::<toml::Value>()
+            .unwrap();
         Config {
             default: defaultconfig,
             user: userconfig,
@@ -89,7 +88,9 @@ impl Config {
     }
 
     pub fn get<'de, T>(&self, path: &[&str]) -> Result<T, ConfigGetError>
-            where T: Deserialize<'de> {
+    where
+        T: Deserialize<'de>,
+    {
         let mut userval = ConfigValue::new(self.user.as_ref());
         let mut defaultval = ConfigValue::new(Some(&self.default));
         for p in path {
@@ -126,7 +127,6 @@ impl Config {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
 
@@ -142,10 +142,14 @@ mod tests {
         let v = dummyconfig.get::<i32>(&["core", "filter_timeoutx"]);
         assert!(v.is_err());
 
-        let v = dummyconfig.get::<String>(&["core", "statistic_file"]).unwrap();
+        let v = dummyconfig
+            .get::<String>(&["core", "statistic_file"])
+            .unwrap();
         assert_eq!(v, "~/.minions/statistic.dat");
 
-        let v = dummyconfig.get_filename(&["core", "statistic_file"]).unwrap();
+        let v = dummyconfig
+            .get_filename(&["core", "statistic_file"])
+            .unwrap();
         assert!(v.to_str().unwrap().ends_with("/.minions/statistic.dat"));
     }
 }

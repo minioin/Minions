@@ -1,35 +1,27 @@
-/*
-* @Author: BlahGeek
-* @Date:   2017-04-23
-* @Last Modified by:   BlahGeek
-* @Last Modified time: 2020-01-17
-*/
+// @Author: BlahGeek
+// @Date:   2017-04-23
+// @Last Modified by:   BlahGeek
+// @Last Modified time: 2020-01-17
 
 extern crate glib;
-extern crate libc;
 extern crate glib_sys;
+extern crate libc;
 
-use std;
-use std::ffi;
-use crate::frontend::gdk;
-use crate::frontend::gtk;
-use crate::frontend::gtk::prelude::*;
+use crate::frontend::{gdk, gtk, gtk::prelude::*};
+use std::{self, ffi};
 
-use std::thread;
-use std::sync::mpsc;
-use std::cell::RefCell;
-use std::rc::Rc;
-use std::ops::Deref;
+use std::{cell::RefCell, ops::Deref, rc::Rc, sync::mpsc, thread};
 
-use crate::frontend::ui::MinionsUI;
-use crate::mcore::context::Context;
-use crate::mcore::action::ActionResult;
-use crate::mcore::item::Item;
-use crate::mcore::matcher::Matcher;
-use crate::mcore::config::Config;
-use crate::mcore::errors::Error;
+use crate::{
+    frontend::ui::MinionsUI,
+    mcore::{
+        action::ActionResult, config::Config, context::Context, errors::Error, item::Item,
+        matcher::Matcher,
+    },
+};
 
 use error_chain::ChainedError;
+use glib::translate::FromGlib;
 
 #[derive(Clone)]
 enum Status {
@@ -47,7 +39,8 @@ enum Status {
         item: Rc<Item>, // entering text for item
         suggestions: Vec<Rc<Item>>,
         selected_idx: i32, // selected index of suggestions
-        receiver: Option<Rc<mpsc::Receiver<ActionResult>>>, // receiver for running suggestion
+        receiver: Option<Rc<mpsc::Receiver<ActionResult>>>, /* receiver for
+                            * running suggestion */
     },
 }
 
@@ -60,23 +53,23 @@ pub struct MinionsApp {
     matcher: Matcher,
 }
 
-
 thread_local! {
     static APP: RefCell<Option<MinionsApp>> = RefCell::new(None);
 }
 
-
-#[link(name="keybinder-3.0")]
-extern {
+#[link(name = "keybinder-3.0")]
+extern "C" {
     fn keybinder_init();
-    fn keybinder_bind(keystring: *const libc::c_char,
-                      handler: extern fn(*const libc::c_char, *mut libc::c_void),
-                      user_data: *mut libc::c_void) -> glib_sys::gboolean;
+    fn keybinder_bind(
+        keystring: *const libc::c_char,
+        handler: extern "C" fn(*const libc::c_char, *mut libc::c_void),
+        user_data: *mut libc::c_void,
+    ) -> glib_sys::gboolean;
 }
 
-extern fn keybinder_callback_show(_: *const libc::c_char, _: *mut libc::c_void) {
+extern "C" fn keybinder_callback_show(_: *const libc::c_char, _: *mut libc::c_void) {
     trace!("keybinder callback: show");
-    glib::idle_add( move || {
+    glib::idle_add(move || {
         APP.with(|app| {
             if let Some(ref mut app) = *app.borrow_mut() {
                 app.reset_window(false);
@@ -86,9 +79,9 @@ extern fn keybinder_callback_show(_: *const libc::c_char, _: *mut libc::c_void) 
     });
 }
 
-extern fn keybinder_callback_show_clipboard(_: *const libc::c_char, _: *mut libc::c_void) {
+extern "C" fn keybinder_callback_show_clipboard(_: *const libc::c_char, _: *mut libc::c_void) {
     trace!("keybinder callback: show with clipboard");
-    glib::idle_add( move || {
+    glib::idle_add(move || {
         APP.with(|app| {
             if let Some(ref mut app) = *app.borrow_mut() {
                 app.reset_window(true);
@@ -99,7 +92,6 @@ extern fn keybinder_callback_show_clipboard(_: *const libc::c_char, _: *mut libc
 }
 
 impl MinionsApp {
-
     fn update_ui(&self) {
         trace!("update ui");
         match self.status {
@@ -110,7 +102,7 @@ impl MinionsApp {
                 self.ui.set_reference(None);
                 self.ui.set_items(Vec::new(), -1, &self.ctx);
                 self.ui.set_spinning(false);
-            },
+            }
             Status::Running(_) => {
                 self.ui.set_entry(None);
                 self.ui.set_filter_text("");
@@ -118,7 +110,7 @@ impl MinionsApp {
                 self.ui.set_reference(None);
                 self.ui.set_items(Vec::new(), -1, &self.ctx);
                 self.ui.set_spinning(true);
-            },
+            }
             Status::Error(ref error) => {
                 self.ui.set_entry(None);
                 self.ui.set_filter_text("");
@@ -127,7 +119,7 @@ impl MinionsApp {
                 self.ui.set_items(Vec::new(), -1, &self.ctx);
                 self.ui.set_spinning(false);
                 self.ui.set_error(&error);
-            },
+            }
             Status::Default => {
                 self.ui.set_spinning(false);
                 self.ui.set_entry(None);
@@ -138,8 +130,12 @@ impl MinionsApp {
                     debug!("No more listing items!");
                     self.ui.window.hide();
                 }
-                self.ui.set_items(self.ctx.list_items.iter().map(|x| x.deref()).collect(), -1, &self.ctx);
-            },
+                self.ui.set_items(
+                    self.ctx.list_items.iter().map(|x| x.deref()).collect(),
+                    -1,
+                    &self.ctx,
+                );
+            }
             Status::Filtering {
                 selected_idx,
                 ref filter_text,
@@ -149,27 +145,32 @@ impl MinionsApp {
                 if selected_idx < 0 {
                     self.ui.set_entry(None);
                 } else {
-                    self.ui.set_entry(Some(&filtered_items[selected_idx as usize]))
+                    self.ui
+                        .set_entry(Some(&filtered_items[selected_idx as usize]))
                 }
                 self.ui.set_spinning(false);
                 self.ui.set_filter_text(&filter_text);
                 self.ui.set_action(None);
                 self.ui.set_reference(self.ctx.reference.as_ref());
-                self.ui.set_items(filtered_items.iter().map(|x| x.deref()).collect(),
-                                  selected_idx, &self.ctx);
-            },
+                self.ui.set_items(
+                    filtered_items.iter().map(|x| x.deref()).collect(),
+                    selected_idx,
+                    &self.ctx,
+                );
+            }
             Status::Entering {
                 ref item,
                 ref suggestions,
                 selected_idx,
-                receiver: _
+                receiver: _,
             } => {
                 self.ui.set_spinning(false);
-                // defer set_entry_editable to prevent a leading space to be inserted
+                // defer set_entry_editable to prevent a leading space to be
+                // inserted
                 glib::timeout_add(50, move || {
                     APP.with(|app| {
                         if let Some(ref app) = *app.borrow() {
-                            if let Status::Entering{..} = app.status {
+                            if let Status::Entering { .. } = app.status {
                                 app.ui.set_entry_editable();
                             }
                         }
@@ -180,8 +181,12 @@ impl MinionsApp {
                 self.ui.set_filter_text("");
                 self.ui.set_action(Some(&item));
                 self.ui.set_reference(None);
-                self.ui.set_items(suggestions.iter().map(|x| x.deref()).collect(), selected_idx, &self.ctx);
-            },
+                self.ui.set_items(
+                    suggestions.iter().map(|x| x.deref()).collect(),
+                    selected_idx,
+                    &self.ctx,
+                );
+            }
         }
     }
 
@@ -192,15 +197,15 @@ impl MinionsApp {
                 debug!("Quit!");
                 self.ui.window.hide();
                 Status::Initial
-            },
+            }
             Status::Default => {
                 self.ctx.reset();
                 Status::Initial
-            },
+            }
             Status::Running(_) => {
                 debug!("Drop thread");
                 Status::Default
-            },
+            }
             _ => Status::Default,
         };
         self.update_ui();
@@ -209,13 +214,11 @@ impl MinionsApp {
     fn process_keyevent_move(&mut self, delta: i32) {
         trace!("Processing keyevent Move: {}", delta);
         self.status = match self.status.clone() {
-            Status::Default | Status::Initial => {
-                Status::Filtering {
-                    selected_idx: 0,
-                    filter_text: String::new(),
-                    filtered_items: self.ctx.list_items.clone(),
-                    timestamp: std::time::Instant::now(),
-                }
+            Status::Default | Status::Initial => Status::Filtering {
+                selected_idx: 0,
+                filter_text: String::new(),
+                filtered_items: self.ctx.list_items.clone(),
+                timestamp: std::time::Instant::now(),
             },
             Status::Filtering {
                 selected_idx,
@@ -236,11 +239,11 @@ impl MinionsApp {
                 }
                 Status::Filtering {
                     selected_idx: new_idx,
-                    filter_text: filter_text,
-                    filtered_items: filtered_items,
-                    timestamp: timestamp,
+                    filter_text,
+                    filtered_items,
+                    timestamp,
                 }
-            },
+            }
             Status::Entering {
                 item,
                 suggestions,
@@ -255,12 +258,12 @@ impl MinionsApp {
                     new_idx = -1;
                 }
                 Status::Entering {
-                    item: item,
-                    suggestions: suggestions,
+                    item,
+                    suggestions,
                     selected_idx: new_idx,
                     receiver: None, // drop receiver
                 }
-            },
+            }
             status @ _ => status,
         };
         self.update_ui();
@@ -290,7 +293,7 @@ impl MinionsApp {
                         Status::Default
                     }
                 }
-            },
+            }
             status @ _ => status,
         };
         self.update_ui();
@@ -304,7 +307,7 @@ impl MinionsApp {
                 let mut text = String::new();
                 text.push(ch);
                 Some(text)
-            },
+            }
             Status::Filtering {
                 ref filter_text,
                 ref timestamp,
@@ -312,12 +315,13 @@ impl MinionsApp {
             } => {
                 let mut text = String::new();
                 if (self.filter_timeout.as_secs() == 0 && self.filter_timeout.subsec_nanos() == 0)
-                    || timestamp.elapsed() < self.filter_timeout {
+                    || timestamp.elapsed() < self.filter_timeout
+                {
                     text = filter_text.clone();
                 }
                 text.push(ch);
                 Some(text)
-            },
+            }
             _ => None,
         };
 
@@ -326,9 +330,9 @@ impl MinionsApp {
             let selected_idx = if filtered_items.len() == 0 { -1 } else { 0 };
 
             self.status = Status::Filtering {
-                selected_idx: selected_idx,
+                selected_idx,
                 filter_text: newfilter,
-                filtered_items: filtered_items,
+                filtered_items,
                 timestamp: std::time::Instant::now(),
             };
             self.update_ui();
@@ -355,11 +359,15 @@ impl MinionsApp {
                     }
                     if self.ctx.selectable_with_text(item) {
                         should_update_ui = true;
-                        Status::Entering{
+                        Status::Entering {
                             item: item.clone(),
-                            suggestions: self.ctx.suggest_arg(item)
+                            suggestions: self
+                                .ctx
+                                .suggest_arg(item)
                                 .unwrap_or(Vec::new())
-                                .into_iter().map(|x| Rc::new(x)).collect(),
+                                .into_iter()
+                                .map(|x| Rc::new(x))
+                                .collect(),
                             selected_idx: -1,
                             receiver: None,
                         }
@@ -368,7 +376,7 @@ impl MinionsApp {
                         self.status.clone()
                     }
                 }
-            },
+            }
             status @ _ => status,
         };
 
@@ -378,28 +386,42 @@ impl MinionsApp {
     }
 
     fn process_entry_text_changed(&mut self) {
-
         // only match if receiver is None
-        if let Status::Entering{item, suggestions, receiver: None, ..} = self.status.clone() {
-            let entry_text = self.ui.textentry.get_text().unwrap();
+        if let Status::Entering {
+            item,
+            suggestions,
+            receiver: None,
+            ..
+        } = self.status.clone()
+        {
+            let entry_text = self.ui.textentry.get_text();
             trace!("Entry text changed: {}", &entry_text);
 
             if entry_text.len() > 0 && self.ctx.runnable_with_text_realtime(&item) {
                 let (send_ch, recv_ch) = mpsc::channel::<ActionResult>();
-                let entry_text_ = entry_text.as_str().to_owned();
-                self.ctx.async_run_with_text_realtime(&item, &entry_text, move |res: ActionResult| {
-                    if let Err(error) = send_ch.send(res) {
-                        warn!("Unable to send to channel: {}", error);
-                    } else {
-                        glib::idle_add(move || {
-                            APP.with(|app| app.borrow_mut().as_mut().unwrap().process_running_text_realtime_callback(&entry_text_));
-                            Continue(false)
-                        });
-                    }
-                });
+                let entry_text_ = entry_text.to_owned();
+                self.ctx.async_run_with_text_realtime(
+                    &item,
+                    &entry_text,
+                    move |res: ActionResult| {
+                        if let Err(error) = send_ch.send(res) {
+                            warn!("Unable to send to channel: {}", error);
+                        } else {
+                            glib::idle_add(move || {
+                                APP.with(|app| {
+                                    app.borrow_mut()
+                                        .as_mut()
+                                        .unwrap()
+                                        .process_running_text_realtime_callback(&entry_text_)
+                                });
+                                Continue(false)
+                            });
+                        }
+                    },
+                );
                 self.status = Status::Entering {
-                    item: item,
-                    suggestions: suggestions,
+                    item,
+                    suggestions,
                     selected_idx: -1,
                     receiver: Some(Rc::new(recv_ch)),
                 };
@@ -408,23 +430,27 @@ impl MinionsApp {
     }
 
     fn process_running_text_realtime_callback(&mut self, text: &str) {
-        if let Status::Entering{item, suggestions, receiver: Some(receiver), ..} = self.status.clone() {
+        if let Status::Entering {
+            item,
+            suggestions,
+            receiver: Some(receiver),
+            ..
+        } = self.status.clone()
+        {
             if let Ok(res) = receiver.try_recv() {
                 trace!("Received realtime text result on callback");
                 self.status = match res {
-                    Ok(res) => {
-                        Status::Entering {
-                            item: item,
-                            suggestions: res.into_iter().map(|x| Rc::new(x)).collect(),
-                            selected_idx: -1,
-                            receiver: None
-                        }
+                    Ok(res) => Status::Entering {
+                        item,
+                        suggestions: res.into_iter().map(|x| Rc::new(x)).collect(),
+                        selected_idx: -1,
+                        receiver: None,
                     },
                     Err(error) => {
                         warn!("Error running realtime text: {}", error.display_chain());
                         Status::Entering {
-                            item: item,
-                            suggestions: suggestions,
+                            item,
+                            suggestions,
                             selected_idx: -1,
                             receiver: None,
                         }
@@ -432,21 +458,19 @@ impl MinionsApp {
                 };
                 self.update_ui();
 
-                if text != self.ui.textentry.get_text().unwrap() {
+                if text != self.ui.textentry.get_text() {
                     self.process_entry_text_changed()
                 }
-
             } else {
                 debug!("Unable to receive realtime text result from channel");
             }
         } else {
             debug!("Invalid status on realtime text callback");
         }
-
     }
 
     fn process_running_callback(&mut self) {
-        let mut res : Option<ActionResult> = None;
+        let mut res: Option<ActionResult> = None;
         if let Status::Running(ref recv_ch) = self.status {
             if let Ok(res_) = recv_ch.try_recv() {
                 trace!("Received result on callback");
@@ -461,7 +485,7 @@ impl MinionsApp {
                 Ok(res) => {
                     self.ctx.async_select_callback(res);
                     Status::Default
-                },
+                }
                 Err(error) => {
                     debug!("Error from channel: {}", error.display_chain());
                     Status::Error(Rc::new(error))
@@ -498,19 +522,28 @@ impl MinionsApp {
                             if let Err(error) = send_ch.send(res) {
                                 debug!("Unable to send to channel: {}", error);
                             } else {
-                                glib::idle_add( || {
-                                    APP.with(move |app| app.borrow_mut().as_mut().unwrap().process_running_callback() );
+                                glib::idle_add(|| {
+                                    APP.with(move |app| {
+                                        app.borrow_mut()
+                                            .as_mut()
+                                            .unwrap()
+                                            .process_running_callback()
+                                    });
                                     Continue(false)
                                 });
                             }
                         });
                         Status::Running(Rc::new(recv_ch))
                     } else if self.ctx.selectable_with_text(&item) {
-                        Status::Entering{
+                        Status::Entering {
                             item: item.clone(),
-                            suggestions: self.ctx.suggest_arg(item)
+                            suggestions: self
+                                .ctx
+                                .suggest_arg(item)
                                 .unwrap_or(Vec::new())
-                                .into_iter().map(|x| Rc::new(x)).collect(),
+                                .into_iter()
+                                .map(|x| Rc::new(x))
+                                .collect(),
                             selected_idx: -1,
                             receiver: None,
                         }
@@ -519,22 +552,33 @@ impl MinionsApp {
                         self.status.clone()
                     }
                 }
-            },
-            Status::Entering{item, suggestions, selected_idx, ..} => {
+            }
+            Status::Entering {
+                item,
+                suggestions,
+                selected_idx,
+                ..
+            } => {
                 let (send_ch, recv_ch) = mpsc::channel::<ActionResult>();
 
                 if selected_idx < 0 {
                     let text = self.ui.get_entry_text();
-                    self.ctx.async_select_with_text(&item, &text, move |res: ActionResult| {
-                        if let Err(error) = send_ch.send(res) {
-                            debug!("Unable to send to channel: {}", error);
-                        } else {
-                            glib::idle_add( || {
-                                APP.with(move |app| app.borrow_mut().as_mut().unwrap().process_running_callback() );
-                                Continue(false)
-                            });
-                        }
-                    });
+                    self.ctx
+                        .async_select_with_text(&item, &text, move |res: ActionResult| {
+                            if let Err(error) = send_ch.send(res) {
+                                debug!("Unable to send to channel: {}", error);
+                            } else {
+                                glib::idle_add(|| {
+                                    APP.with(move |app| {
+                                        app.borrow_mut()
+                                            .as_mut()
+                                            .unwrap()
+                                            .process_running_callback()
+                                    });
+                                    Continue(false)
+                                });
+                            }
+                        });
                     Status::Running(Rc::new(recv_ch))
                 } else {
                     let item = &suggestions[selected_idx as usize];
@@ -544,8 +588,13 @@ impl MinionsApp {
                             if let Err(error) = send_ch.send(res) {
                                 debug!("Unable to send to channel: {}", error);
                             } else {
-                                glib::idle_add( || {
-                                    APP.with(move |app| app.borrow_mut().as_mut().unwrap().process_running_callback() );
+                                glib::idle_add(|| {
+                                    APP.with(move |app| {
+                                        app.borrow_mut()
+                                            .as_mut()
+                                            .unwrap()
+                                            .process_running_callback()
+                                    });
                                     Continue(false)
                                 });
                             }
@@ -556,8 +605,7 @@ impl MinionsApp {
                         self.status.clone()
                     }
                 }
-
-            },
+            }
             status @ _ => status,
         };
         self.update_ui();
@@ -570,12 +618,12 @@ impl MinionsApp {
                 selected_idx,
                 filtered_items,
                 ..
-            } | Status::Entering{
+            }
+            | Status::Entering {
                 selected_idx,
                 suggestions: filtered_items,
                 ..
             } => {
-
                 let item = &filtered_items[selected_idx as usize];
                 if let Err(error) = self.ctx.copy_content_to_clipboard(item) {
                     warn!("Unable to copy item: {}", error.display_chain());
@@ -583,8 +631,8 @@ impl MinionsApp {
                     info!("Item copied");
                 }
                 self.status.clone()
-            },
-            status @ _ => { status },
+            }
+            status @ _ => status,
         };
         self.ui.window.hide();
     }
@@ -593,34 +641,40 @@ impl MinionsApp {
         let key = event.get_keyval();
         let modi = event.get_state();
         trace!("Key pressed: {:?}/{:?}", key, modi);
-        if key == gdk::enums::key::Return {
+        if key == gdk::keys::constants::Return {
             self.process_keyevent_enter();
             Inhibit(true)
-        } else if key == gdk::enums::key::space {
+        } else if key == gdk::keys::constants::space {
             self.process_keyevent_space();
             Inhibit(false)
-        } else if key == gdk::enums::key::Escape {
+        } else if key == gdk::keys::constants::Escape {
             self.process_keyevent_escape();
             Inhibit(true)
-        } else if key == gdk::enums::key::Tab {
+        } else if key == gdk::keys::constants::Tab {
             self.process_keyevent_tab();
             Inhibit(true)
-        } else if key == 'j' as u32 && modi.contains(gdk::ModifierType::CONTROL_MASK) {
+        } else if key == gdk::keys::Key::from_glib('j' as u32)
+            && modi.contains(gdk::ModifierType::CONTROL_MASK)
+        {
             self.process_keyevent_move(1);
             Inhibit(true)
-        } else if key == 'k' as u32 && modi.contains(gdk::ModifierType::CONTROL_MASK) {
+        } else if key == gdk::keys::Key::from_glib('k' as u32)
+            && modi.contains(gdk::ModifierType::CONTROL_MASK)
+        {
             self.process_keyevent_move(-1);
             Inhibit(true)
-        } else if key == 'c' as u32 && modi.contains(gdk::ModifierType::CONTROL_MASK) {
+        } else if key == gdk::keys::Key::from_glib('c' as u32)
+            && modi.contains(gdk::ModifierType::CONTROL_MASK)
+        {
             self.process_keyevent_copy();
             Inhibit(true)
-        } else if key == gdk::enums::key::Down {
+        } else if key == gdk::keys::constants::Down {
             self.process_keyevent_move(1);
             Inhibit(true)
-        } else if key == gdk::enums::key::Up {
+        } else if key == gdk::keys::constants::Up {
             self.process_keyevent_move(-1);
             Inhibit(true)
-        } else if let Some(ch) = gdk::keyval_to_unicode(key) {
+        } else if let Some(ch) = gdk::keyval_to_unicode(*key) {
             if ch.is_alphanumeric() {
                 self.process_keyevent_char(ch);
             } else {
@@ -638,7 +692,10 @@ impl MinionsApp {
         self.status = Status::Initial;
         if send_clipboard {
             if let Err(error) = self.ctx.quicksend_from_clipboard() {
-                warn!("Unable to get content from clipboard: {}", error.display_chain());
+                warn!(
+                    "Unable to get content from clipboard: {}",
+                    error.display_chain()
+                );
             } else {
                 self.status = Status::Default;
             }
@@ -647,23 +704,32 @@ impl MinionsApp {
         self.update_ui();
     }
 
-    pub fn new(configpath: &std::path::Path) -> &'static thread::LocalKey<RefCell<Option<MinionsApp>>> {
+    pub fn new(
+        configpath: &std::path::Path,
+    ) -> &'static thread::LocalKey<RefCell<Option<MinionsApp>>> {
         let config = Config::new(configpath);
         let global_config = config.partial(&["core"]).unwrap();
 
+        println!(
+            "{:?}",
+            &global_config.get_filename(&["statistic_file"]).unwrap()
+        );
         let matcher = Matcher::new(
             &global_config.get_filename(&["statistic_file"]).unwrap(),
-            &global_config.get::<String>(&["statistic_file_salt"]).unwrap()
-            ).unwrap();
+            "",
+        )
+        .unwrap();
 
         let ctx = Context::new(&config);
 
         let app = MinionsApp {
             ui: MinionsUI::new(),
-            ctx: ctx,
+            ctx,
             status: Status::Initial,
-            filter_timeout: std::time::Duration::from_millis(global_config.get::<u64>(&["filter_timeout"]).unwrap()),
-            matcher: matcher,
+            filter_timeout: std::time::Duration::from_millis(
+                global_config.get::<u64>(&["filter_timeout"]).unwrap(),
+            ),
+            matcher,
         };
         app.update_ui();
         app.ui.window.hide();
@@ -672,7 +738,9 @@ impl MinionsApp {
             APP.with(|app| {
                 if let Some(ref mut app) = *app.borrow_mut() {
                     app.process_keyevent(event)
-                } else { Inhibit(false) }
+                } else {
+                    Inhibit(false)
+                }
             })
         });
 
@@ -698,11 +766,17 @@ impl MinionsApp {
                 warn!("No shortcut defined for show");
             }
 
-            let keys = global_config.get::<String>(&["shortcut_show_quicksend"]).unwrap();
+            let keys = global_config
+                .get::<String>(&["shortcut_show_quicksend"])
+                .unwrap();
             if keys.len() > 0 {
                 info!("Binding shortcut for show_quicksend: {}", keys);
                 let s = ffi::CString::new(keys).unwrap();
-                keybinder_bind(s.as_ptr(), keybinder_callback_show_clipboard, std::ptr::null_mut());
+                keybinder_bind(
+                    s.as_ptr(),
+                    keybinder_callback_show_clipboard,
+                    std::ptr::null_mut(),
+                );
             } else {
                 warn!("No shortcut defined for show_quicksend");
             }
@@ -725,7 +799,7 @@ impl MinionsApp {
             Continue(true)
         });
 
-        APP.with(|g_app| *g_app.borrow_mut() = Some(app) );
+        APP.with(|g_app| *g_app.borrow_mut() = Some(app));
         &APP
     }
 }

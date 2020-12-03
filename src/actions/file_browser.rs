@@ -1,19 +1,23 @@
-/*
-* @Author: BlahGeek
-* @Date:   2017-06-17
-* @Last Modified by:   BlahGeek
-* @Last Modified time: 2020-01-17
-*/
+// @Author: BlahGeek
+// @Date:   2017-06-17
+// @Last Modified by:   BlahGeek
+// @Last Modified time: 2020-01-17
 
-use std::sync::Arc;
-use std::path::{PathBuf, Path};
+use std::{
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 
 use dirs;
 
-use crate::mcore::item::{Item, Icon};
-use crate::mcore::action::{Action, ActionResult};
-use crate::mcore::config::Config;
-use crate::actions::utils::open;
+use crate::{
+    actions::utils::open,
+    mcore::{
+        action::{Action, ActionResult},
+        config::Config,
+        item::{Icon, Item},
+    },
+};
 
 struct FileBrowserEntry {
     name: String,
@@ -21,18 +25,17 @@ struct FileBrowserEntry {
     is_file: bool,
 }
 
-
 impl FileBrowserEntry {
     fn new(name: String, path: PathBuf) -> Option<FileBrowserEntry> {
-        if ! (path.is_dir() || path.is_file()) {
+        if !(path.is_dir() || path.is_file()) {
             warn!("Invalid path: {:?}", path);
             None
         } else {
             let is_file = path.is_file();
             Some(FileBrowserEntry {
-                name: name,
-                path: path,
-                is_file: is_file,
+                name,
+                path,
+                is_file,
             })
         }
     }
@@ -42,29 +45,29 @@ impl FileBrowserEntry {
             title: self.name.clone(),
             subtitle: Some(self.path.to_string_lossy().into()),
             badge: if self.is_file {
-                    Some("File".into())
-                } else {
-                    Some("Directory".into())
-                },
+                Some("File".into())
+            } else {
+                Some("Directory".into())
+            },
             icon: Some(if self.is_file {
-                    Icon::FontAwesome("file".into())
-                } else {
-                    Icon::FontAwesome("folder".into())
-                }),
+                Icon::FontAwesome("file".into())
+            } else {
+                Icon::FontAwesome("folder".into())
+            }),
             data: Some(self.path.to_string_lossy().into()),
             priority: -10,
             action: Some(Arc::new(self)),
-            .. Item::default()
+            ..Item::default()
         }
     }
 }
 
-
 impl Action for FileBrowserEntry {
+    fn runnable_bare(&self) -> bool {
+        true
+    }
 
-    fn runnable_bare (&self) -> bool { true }
-
-    fn run_bare (&self) -> ActionResult {
+    fn run_bare(&self) -> ActionResult {
         if self.is_file {
             open::that(&self.path.to_string_lossy())?;
             Ok(Vec::new())
@@ -76,10 +79,13 @@ impl Action for FileBrowserEntry {
             for entry in entries.into_iter() {
                 match entry {
                     Ok(entry) => {
-                        if let Some(act) = FileBrowserEntry::new(entry.file_name().to_string_lossy().into(), entry.path()) {
+                        if let Some(act) = FileBrowserEntry::new(
+                            entry.file_name().to_string_lossy().into(),
+                            entry.path(),
+                        ) {
                             ret.push(act.into_item())
                         }
-                    },
+                    }
                     Err(error) => {
                         warn!("Read dir error: {}", error);
                     }
@@ -103,11 +109,13 @@ struct EntryConfig {
     path: String,
 }
 
-
 pub fn get(config: &Config) -> Vec<Item> {
-    let entries = config.get::<Vec<EntryConfig>>(&["file_browser", "entries"]).unwrap();
+    let entries = config
+        .get::<Vec<EntryConfig>>(&["file_browser", "entries"])
+        .unwrap();
 
-    entries.into_iter()
+    entries
+        .into_iter()
         .map(|c| {
             let mut p = Path::new(&c.path).to_path_buf();
             if c.path.starts_with("~/") {
@@ -119,6 +127,6 @@ pub fn get(config: &Config) -> Vec<Item> {
             FileBrowserEntry::new(c.name, p)
         })
         .filter(|x| x.is_some())
-            .map(|x| x.unwrap().into_item())
-            .collect()
+        .map(|x| x.unwrap().into_item())
+        .collect()
 }

@@ -1,9 +1,7 @@
-/*
-* @Author: BlahGeek
-* @Date:   2017-08-19
-* @Last Modified by:   BlahGeek
-* @Last Modified time: 2018-03-29
-*/
+// @Author: BlahGeek
+// @Date:   2017-08-19
+// @Last Modified by:   BlahGeek
+// @Last Modified time: 2018-03-29
 
 use std::process::{Command, Stdio};
 
@@ -34,44 +32,46 @@ impl Requirement {
     }
 
     fn check_executable(exe: &str) -> bool {
-        match Command::new("which").arg(exe)
+        match Command::new("which")
+            .arg(exe)
             .stdout(Stdio::null())
             .stderr(Stdio::null())
-            .status() {
+            .status()
+        {
             Err(error) => {
                 warn!("Error running which: {}", error);
                 false
-            },
-            Ok(status) => {
-                status.success()
-            },
+            }
+            Ok(status) => status.success(),
         }
     }
 
     fn check_python_package(pkg: &str, python: &str) -> bool {
         let mut cmd = Command::new(python);
         cmd.arg("-c")
-           .arg("import pkg_resources as p;import sys;p.require(sys.argv[1])")
-           .arg(pkg);
+            .arg("import pkg_resources as p;import sys;p.require(sys.argv[1])")
+            .arg(pkg);
         match cmd.stdout(Stdio::null()).stderr(Stdio::null()).status() {
             Err(error) => {
-                warn!("Error checking python package {} for {}: {}", pkg, python, error);
+                warn!(
+                    "Error checking python package {} for {}: {}",
+                    pkg, python, error
+                );
                 false
-            },
-            Ok(status) => {
-                status.success()
-            },
+            }
+            Ok(status) => status.success(),
         }
     }
 
     pub fn check(&self) -> bool {
         let ret = match self {
-            &Requirement::Executable(ref name) =>
-                Requirement::check_executable(&name),
-            &Requirement::Python2Package(ref name) =>
-                Requirement::check_python_package(&name, "python2"),
-            &Requirement::Python3Package(ref name) =>
-                Requirement::check_python_package(&name, "python3"),
+            &Requirement::Executable(ref name) => Requirement::check_executable(&name),
+            &Requirement::Python2Package(ref name) => {
+                Requirement::check_python_package(&name, "python2")
+            }
+            &Requirement::Python3Package(ref name) => {
+                Requirement::check_python_package(&name, "python3")
+            }
         };
         trace!("Requirement {:?} check result: {}", &self, ret);
         ret

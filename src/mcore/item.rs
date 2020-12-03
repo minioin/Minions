@@ -1,19 +1,15 @@
-/*
-* @Author: BlahGeek
-* @Date:   2017-04-19
-* @Last Modified by:   BlahGeek
-* @Last Modified time: 2020-01-16
-*/
+// @Author: BlahGeek
+// @Date:   2017-04-19
+// @Last Modified by:   BlahGeek
+// @Last Modified time: 2020-01-16
 
-use std;
-use std::fmt;
-use std::sync::Arc;
 use crate::mcore::action::Action;
+use std::{self, fmt, sync::Arc};
 
 #[derive(Debug, Clone)]
 pub enum Icon {
     GtkName(String),
-    Character{ch: char, font: String},
+    Character { ch: char, font: String },
     File(std::path::PathBuf),
     FontAwesome(String),
 }
@@ -42,23 +38,20 @@ pub struct Item {
     pub action: Option<Arc<dyn Action + Sync + Send>>,
 }
 
-
 impl fmt::Display for Item {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.title)?;
-        if let & Some(ref subtitle) = &self.subtitle {
+        if let &Some(ref subtitle) = &self.subtitle {
             write!(f, "({})", subtitle)?;
         };
-        if let & Some(ref badge) = &self.badge {
+        if let &Some(ref badge) = &self.badge {
             write!(f, "[{}]", badge)?;
         };
         Ok(())
     }
 }
 
-
 impl Item {
-
     /// Get searchable str reference
     /// aka `search_str` or `title`
     pub fn get_search_str(&self) -> &str {
@@ -68,5 +61,4 @@ impl Item {
             &self.title
         }
     }
-
 }

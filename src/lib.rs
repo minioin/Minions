@@ -3,8 +3,8 @@
 #[macro_use]
 extern crate error_chain;
 
-pub mod mcore;
 pub mod actions;
+pub mod mcore;
 
 #[macro_use]
 extern crate log;

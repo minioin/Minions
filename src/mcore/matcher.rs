@@ -1,28 +1,26 @@
-/*
-* @Author: BlahGeek
-* @Date:   2017-08-09
-* @Last Modified by:   BlahGeek
-* @Last Modified time: 2017-08-19
-*/
+// @Author: BlahGeek
+// @Date:   2017-08-09
+// @Last Modified by:   BlahGeek
+// @Last Modified time: 2017-08-19
 
-extern crate crypto;
 extern crate byteorder;
+extern crate crypto;
 
-use self::crypto::digest::Digest;
-use self::crypto::sha1::Sha1;
+use self::crypto::{digest::Digest, sha1::Sha1};
 
 use self::byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 
 use std::collections::btree_map::BTreeMap;
 
-use std::io;
-use std::io::{Read, Write};
-use std::fs::{File, OpenOptions};
-use std::path::Path;
-use std::rc::Rc;
+use std::{
+    fs::{File, OpenOptions},
+    io,
+    io::{Read, Write},
+    path::Path,
+    rc::Rc,
+};
 
-use crate::mcore::item::Item;
-use crate::mcore::fuzzymatch::fuzzymatch;
+use crate::mcore::{fuzzymatch::fuzzymatch, item::Item};
 
 /// 20 byte array representing SHA1 hash result
 #[derive(PartialOrd, PartialEq, Eq, Ord, Debug)]
@@ -34,7 +32,7 @@ impl SHA1Result {
     fn read_from(reader: &mut dyn Read) -> io::Result<SHA1Result> {
         let mut sha1bytes: [u8; 20] = [0; 20];
         reader.read_exact(&mut sha1bytes)?;
-        Ok(SHA1Result{ bytes: sha1bytes })
+        Ok(SHA1Result { bytes: sha1bytes })
     }
 
     fn write_to(&self, writer: &mut dyn Write) -> io::Result<()> {
@@ -51,7 +49,7 @@ impl<'a> From<&'a str> for SHA1Result {
         let mut bytes: [u8; 20] = [0; 20];
         hash.result(&mut bytes);
 
-        SHA1Result{ bytes: bytes }
+        SHA1Result { bytes }
     }
 }
 
@@ -68,8 +66,9 @@ const FILE_MAGIC: i32 = 0x23333333;
 //   - SHA1(SALT + filter_text + selected_item)
 //
 // File format: MAGIC (SHA1, count) (SHA1, count) (SHA1, count) ...
-// At startup, the file is loaded, compacted (merge same hashes using count) and dumped back to the file
-// While running, new data would be appended only (would be compacted on next running)
+// At startup, the file is loaded, compacted (merge same hashes using count) and
+// dumped back to the file While running, new data would be appended only (would
+// be compacted on next running)
 pub struct Matcher {
     statistics: BTreeMap<SHA1Result, u32>,
     salt: String,
@@ -94,7 +93,10 @@ fn load(path: &Path) -> io::Result<BTreeMap<SHA1Result, u32>> {
 
     let magic = f.read_i32::<LittleEndian>()?;
     if magic != FILE_MAGIC {
-        return Err(io::Error::new(io::ErrorKind::InvalidData, "Invalid file magic"));
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "Invalid file magic",
+        ));
     }
 
     let mut statistics = BTreeMap::new();
@@ -110,8 +112,10 @@ fn load(path: &Path) -> io::Result<BTreeMap<SHA1Result, u32>> {
                 if !inserted {
                     statistics.insert(sha1, count);
                 }
-            },
-            Err(_) => { break; }
+            }
+            Err(_) => {
+                break;
+            }
         }
     }
 
@@ -119,7 +123,6 @@ fn load(path: &Path) -> io::Result<BTreeMap<SHA1Result, u32>> {
 }
 
 impl Matcher {
-
     fn hash_item(&self, item: &Item) -> SHA1Result {
         let s = format!("{}:{}", &self.salt, item.get_search_str());
         s.as_str().into()
@@ -148,7 +151,11 @@ impl Matcher {
     /// Record a hit of item, optionally with pattern
     /// This would update the statistics and append log to file
     pub fn record(&mut self, pattern: Option<&str>, item: &Item) -> io::Result<()> {
-        trace!("Record history with pattern {:?} and item {}", pattern, item.get_search_str());
+        trace!(
+            "Record history with pattern {:?} and item {}",
+            pattern,
+            item.get_search_str()
+        );
         let sha1 = self.hash_item(item);
         let count = self.inc(sha1)?;
         trace!("New count for item: {}", count);
@@ -175,8 +182,8 @@ impl Matcher {
         debug!("Dump (compact) statistics to {:?}", path);
         dump(path, &statistics)?;
 
-        Ok(Matcher{
-            statistics: statistics,
+        Ok(Matcher {
+            statistics,
             file: io::BufWriter::new(OpenOptions::new().append(true).open(path)?),
             salt: salt.into(),
         })
@@ -188,20 +195,28 @@ impl Matcher {
         trace!("filter: {:?}", pattern);
         let scores = items.iter().map(|item| {
             let p0 = fuzzymatch(item.get_search_str(), pattern, false);
-            let p1 = ((self.statistics.get(&self.hash_item(&item)).unwrap_or(&0) + 1) as f32).log2() as i32;
-            let p2 = 2 * ((self.statistics.get(&self.hash_pattern_item(pattern, &item)).unwrap_or(&0) + 1) as f32).log2() as i32;
+            let p1 = ((self.statistics.get(&self.hash_item(&item)).unwrap_or(&0) + 1) as f32).log2()
+                as i32;
+            let p2 = 2
+                * ((self
+                    .statistics
+                    .get(&self.hash_pattern_item(pattern, &item))
+                    .unwrap_or(&0)
+                    + 1) as f32)
+                    .log2() as i32;
             trace!("Score: {}: {} + {} + {}", &item.title, p0, p1, p2);
-            (p0 + p1 + p2, p0)  // final score and the base score
+            (p0 + p1 + p2, p0) // final score and the base score
         });
-        let mut items_and_scores =
-            items.iter().map(|x| x.clone())
+        let mut items_and_scores = items
+            .iter()
+            .map(|x| x.clone())
             .zip(scores.into_iter())
             .collect::<Vec<(Rc<Item>, (i32, i32))>>();
         items_and_scores.sort_by_key(|item_and_score| -(item_and_score.1).0);
-        items_and_scores.into_iter()
+        items_and_scores
+            .into_iter()
             .filter(|item_and_score| (item_and_score.1).1 > 0)
             .map(|item_and_score| item_and_score.0)
             .collect::<Vec<Rc<Item>>>()
     }
-
 }
