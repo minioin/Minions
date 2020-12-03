@@ -3,12 +3,8 @@
 // @Last Modified by:   BlahGeek
 // @Last Modified time: 2020-01-17
 
-extern crate glib;
-extern crate glib_sys;
-extern crate libc;
-
 use crate::frontend::{gdk, gtk, gtk::prelude::*};
-use std::{self, ffi};
+use std::{self};
 
 use std::{cell::RefCell, ops::Deref, rc::Rc, sync::mpsc, thread};
 
@@ -57,40 +53,6 @@ thread_local! {
     static APP: RefCell<Option<MinionsApp>> = RefCell::new(None);
 }
 
-#[link(name = "keybinder-3.0")]
-extern "C" {
-    fn keybinder_init();
-    fn keybinder_bind(
-        keystring: *const libc::c_char,
-        handler: extern "C" fn(*const libc::c_char, *mut libc::c_void),
-        user_data: *mut libc::c_void,
-    ) -> glib_sys::gboolean;
-}
-
-extern "C" fn keybinder_callback_show(_: *const libc::c_char, _: *mut libc::c_void) {
-    trace!("keybinder callback: show");
-    glib::idle_add(move || {
-        APP.with(|app| {
-            if let Some(ref mut app) = *app.borrow_mut() {
-                app.reset_window(false);
-            }
-        });
-        Continue(false)
-    });
-}
-
-extern "C" fn keybinder_callback_show_clipboard(_: *const libc::c_char, _: *mut libc::c_void) {
-    trace!("keybinder callback: show with clipboard");
-    glib::idle_add(move || {
-        APP.with(|app| {
-            if let Some(ref mut app) = *app.borrow_mut() {
-                app.reset_window(true);
-            }
-        });
-        Continue(false)
-    });
-}
-
 impl MinionsApp {
     fn update_ui(&self) {
         trace!("update ui");
@@ -128,7 +90,7 @@ impl MinionsApp {
                 self.ui.set_reference(self.ctx.reference.as_ref());
                 if self.ctx.list_items.len() == 0 {
                     debug!("No more listing items!");
-                    self.ui.window.hide();
+                    gtk::main_quit();
                 }
                 self.ui.set_items(
                     self.ctx.list_items.iter().map(|x| x.deref()).collect(),
@@ -195,7 +157,6 @@ impl MinionsApp {
         self.status = match self.status {
             Status::Initial => {
                 debug!("Quit!");
-                self.ui.window.hide();
                 Status::Initial
             }
             Status::Default => {
@@ -634,7 +595,7 @@ impl MinionsApp {
             }
             status @ _ => status,
         };
-        self.ui.window.hide();
+        gtk::main_quit();
     }
 
     fn process_keyevent(&mut self, event: &gdk::EventKey) -> Inhibit {
@@ -686,24 +647,6 @@ impl MinionsApp {
         }
     }
 
-    fn reset_window(&mut self, send_clipboard: bool) {
-        trace!("Resetting window: {}", send_clipboard);
-        self.ctx.reset();
-        self.status = Status::Initial;
-        if send_clipboard {
-            if let Err(error) = self.ctx.quicksend_from_clipboard() {
-                warn!(
-                    "Unable to get content from clipboard: {}",
-                    error.display_chain()
-                );
-            } else {
-                self.status = Status::Default;
-            }
-        }
-        self.ui.window.show();
-        self.update_ui();
-    }
-
     pub fn new(
         configpath: &std::path::Path,
     ) -> &'static thread::LocalKey<RefCell<Option<MinionsApp>>> {
@@ -732,7 +675,6 @@ impl MinionsApp {
             matcher,
         };
         app.update_ui();
-        app.ui.window.hide();
 
         app.ui.window.connect_key_press_event(move |_, event| {
             APP.with(|app| {
@@ -755,32 +697,10 @@ impl MinionsApp {
             });
         });
 
-        unsafe {
-            keybinder_init();
-            let keys = global_config.get::<String>(&["shortcut_show"]).unwrap();
-            if keys.len() > 0 {
-                info!("Binding shortcut for show: {}", keys);
-                let s = ffi::CString::new(keys).unwrap();
-                keybinder_bind(s.as_ptr(), keybinder_callback_show, std::ptr::null_mut());
-            } else {
-                warn!("No shortcut defined for show");
-            }
-
-            let keys = global_config
-                .get::<String>(&["shortcut_show_quicksend"])
-                .unwrap();
-            if keys.len() > 0 {
-                info!("Binding shortcut for show_quicksend: {}", keys);
-                let s = ffi::CString::new(keys).unwrap();
-                keybinder_bind(
-                    s.as_ptr(),
-                    keybinder_callback_show_clipboard,
-                    std::ptr::null_mut(),
-                );
-            } else {
-                warn!("No shortcut defined for show_quicksend");
-            }
-        }
+        app.ui.window.connect_focus_out_event(move |_, _| {
+            gtk::main_quit();
+            Inhibit(false)
+        });
 
         app.ui.window.connect_delete_event(move |_, _| {
             gtk::main_quit();

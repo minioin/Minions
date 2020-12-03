@@ -3,9 +3,9 @@
 Minions uses configuration file to customize its behaviour.
 
 By default, Minions would use contents in [default.toml](../config/default.toml) as configuration.
-It `~/.minions/config.toml` exists, existing sections would override ones in default.toml, but non-existing sections would still taken from default.toml. See the default.toml for complete list of configuration options.
+It `~/.local/share/minions/config.toml` exists, existing sections would override ones in default.toml, but non-existing sections would still taken from default.toml. See the default.toml for complete list of configuration options.
 
-For example, if `~/.minions/config.toml` contains the following content:
+For example, if `~/.local/share/minions/config.toml` contains the following content:
 
 ```toml
 [file_browser]

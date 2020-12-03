@@ -8,7 +8,7 @@ from datetime import datetime
 
 
 EMOJIPEDIA_URL = 'https://emojipedia.org/emoji/'
-EMOJI_DATA_PATH = os.path.expanduser('~/.minions/emoji.html')
+EMOJI_DATA_PATH = os.path.expanduser('~/.local/share/minions/emoji.html')
 EMOJI_PATTERN = (r'<a\s+href="/emoji/[^/]*/">' +
                  r'\s*<span\s+class="emoji">' +
                  r'\s*([^<])' +  # ignore multi-char emoji for now

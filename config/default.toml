@@ -14,14 +14,14 @@
     shortcut_show_quicksend = "<Ctrl><Shift>space"
 
     # Statistic file location
-    statistic_file = "~/.minions/statistic.dat"
+    statistic_file = "~/.local/share/minions/statistic.dat"
 
     # Hash salt used in statistic file
     # Change this value would make all statistic invalid
     statistic_file_salt = "Minions-Salt"
 
     # Database location, used by many services (e.g. clipboard history)
-    db_file = "~/.minions/minions.db"
+    db_file = "~/.local/share/minions/minions.db"
 
     # Max number of saved history entries (input text) for each action
     history = 10

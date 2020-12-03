@@ -3,21 +3,9 @@
 // @Last Modified by:   BlahGeek
 // @Last Modified time: 2020-01-17
 
-extern crate chrono;
-extern crate clap;
-extern crate gtk;
-extern crate minions;
-extern crate nix;
-extern crate toml;
-
-extern crate fern;
-extern crate log;
-
 use dirs;
-
-use std::path::Path;
-
 use minions::frontend::app::MinionsApp;
+use std::path::Path;
 
 fn main() {
     let mut logger = fern::Dispatch::new().level(log::LevelFilter::Warn);
@@ -62,7 +50,9 @@ fn main() {
 
     let configfile = match args.value_of("config") {
         Some(filename) => Path::new(&filename).to_path_buf(),
-        None => dirs::home_dir().unwrap().join(".minions/config.toml"),
+        None => dirs::home_dir()
+            .unwrap()
+            .join(".local/share/minions/config.toml"),
     };
 
     gtk::init().expect("Failed to initialize GTK");
